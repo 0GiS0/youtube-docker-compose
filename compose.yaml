@@ -1,0 +1,65 @@
+services:
+  db:
+    image: mcr.microsoft.com/azure-sql-edge:latest
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=Password123!
+    volumes:
+      - db-data:/var/opt/mssql
+    networks:
+      - tour-of-heroes-vnet
+  
+  api:
+    depends_on:
+      - db
+    build: tour-of-heroes-api
+    develop:
+      watch:
+        - action: rebuild
+          path: tour-of-heroes-api/.
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=db,1433;Initial Catalog=heroes;Persist Security Info=False;User ID=sa;Password=Password123!;Encrypt=False
+    ports:
+      - 5051:5000
+    networks:
+      - tour-of-heroes-vnet
+  
+  web:
+    depends_on:
+      - api
+    build:
+      context: tour-of-heroes-angular
+      dockerfile: Dockerfile.gh-copilot
+    develop:
+      watch:
+        - action: rebuild
+          path: tour-of-heroes-angular/.
+    ports:
+      - 8080:80
+    networks:
+      - tour-of-heroes-vnet
+
+  fake-calls:
+    depends_on:
+      - api
+    image: alpine/curl:latest
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        sleep 5
+        while true; do
+          curl -o /dev/null -s -w "%{http_code}\n" "http://api:5000/api/hero" || true       
+          sleep 0.5
+        done
+    networks:
+      - tour-of-heroes-vnet   
+    profiles: [debug]
+
+
+networks:
+  tour-of-heroes-vnet:
+
+volumes:
+  db-data:
+  
